@@ -207,6 +207,7 @@ mod tests {
             msgs.push(assistant_msg(vec![tool_use_block(&id, "Read")]));
             msgs.push(user_msg(vec![tool_result_block(&id, &format!("data-{i}"))]));
         }
+        msgs.push(assistant_msg(vec![text_block("processed")]));
         let config = CompactConfig {
             micro_keep_recent: 2,
             ..default_config()
@@ -258,6 +259,7 @@ mod tests {
             user_msg(vec![tool_result_block("t2", "skill-output")]),
             assistant_msg(vec![tool_use_block("t3", "ExecCommand")]),
             user_msg(vec![tool_result_block("t3", "bash-output")]),
+            assistant_msg(vec![text_block("processed")]),
         ];
         // compactable_tools does NOT include Skill.
         let config = CompactConfig {
@@ -338,6 +340,7 @@ mod tests {
             user_msg(vec![tool_result_block("t1", &long_content)]),
             assistant_msg(vec![tool_use_block("t2", "Read")]),
             user_msg(vec![tool_result_block("t2", "keep")]),
+            assistant_msg(vec![text_block("processed")]),
         ];
         let config = CompactConfig {
             micro_keep_recent: 1,
@@ -346,6 +349,81 @@ mod tests {
         let result = microcompact(&mut msgs, &config);
         assert_eq!(result.cleared_count, 1);
         assert_eq!(result.estimated_tokens_freed, 100); // 400 / 4
+    }
+
+    #[test]
+    fn preserves_entire_pending_tool_result_batch() {
+        let tool_uses = (0..11).map(|i| tool_use_block(&format!("t{i}"), "Read")).collect();
+        let tool_results = (0..11)
+            .map(|i| tool_result_block(&format!("t{i}"), &format!("data-{i}")))
+            .collect();
+        let mut msgs = vec![assistant_msg(tool_uses), user_msg(tool_results)];
+        let config = CompactConfig {
+            micro_keep_recent: 5,
+            ..default_config()
+        };
+
+        assert!(should_microcompact(&msgs, &config));
+        let result = microcompact(&mut msgs, &config);
+
+        assert_eq!(result.cleared_count, 0);
+        assert!(
+            msgs[1].content.iter().all(
+                |block| matches!(block, ContentBlock::ToolResult { content, .. } if content != CLEARED_TOOL_RESULT)
+            )
+        );
+    }
+
+    #[test]
+    fn tool_result_batch_becomes_eligible_after_assistant_response() {
+        let tool_uses = (0..11).map(|i| tool_use_block(&format!("t{i}"), "Read")).collect();
+        let tool_results = (0..11)
+            .map(|i| tool_result_block(&format!("t{i}"), &format!("data-{i}")))
+            .collect();
+        let mut msgs = vec![
+            assistant_msg(tool_uses),
+            user_msg(tool_results),
+            assistant_msg(vec![text_block("processed")]),
+        ];
+        let config = CompactConfig {
+            micro_keep_recent: 5,
+            ..default_config()
+        };
+
+        let result = microcompact(&mut msgs, &config);
+
+        assert_eq!(result.cleared_count, 6);
+    }
+
+    #[test]
+    fn clears_consumed_results_without_touching_pending_batch() {
+        let consumed_tool_uses = (0..7).map(|i| tool_use_block(&format!("old-{i}"), "Read")).collect();
+        let consumed_results = (0..7)
+            .map(|i| tool_result_block(&format!("old-{i}"), &format!("old-data-{i}")))
+            .collect();
+        let pending_tool_uses = (0..7).map(|i| tool_use_block(&format!("new-{i}"), "Read")).collect();
+        let pending_results = (0..7)
+            .map(|i| tool_result_block(&format!("new-{i}"), &format!("new-data-{i}")))
+            .collect();
+        let mut msgs = vec![
+            assistant_msg(consumed_tool_uses),
+            user_msg(consumed_results),
+            assistant_msg(pending_tool_uses),
+            user_msg(pending_results),
+        ];
+        let config = CompactConfig {
+            micro_keep_recent: 2,
+            ..default_config()
+        };
+
+        let result = microcompact(&mut msgs, &config);
+
+        assert_eq!(result.cleared_count, 5);
+        assert!(
+            msgs[3].content.iter().all(
+                |block| matches!(block, ContentBlock::ToolResult { content, .. } if content != CLEARED_TOOL_RESULT)
+            )
+        );
     }
 
     // ── should_microcompact ─────────────────────────────────────────────
@@ -370,6 +448,7 @@ mod tests {
             user_msg(vec![tool_result_block("t1", "data-1")]),
             assistant_msg(vec![tool_use_block("t2", "Read")]),
             user_msg(vec![tool_result_block("t2", "data-2")]),
+            assistant_msg(vec![text_block("processed")]),
         ];
         let config = CompactConfig {
             micro_keep_recent: 0,

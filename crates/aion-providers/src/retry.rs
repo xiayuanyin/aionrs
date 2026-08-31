@@ -28,7 +28,7 @@ where
 }
 
 pub const MAX_STREAM_RETRIES: u32 = 2;
-pub const MAX_INITIAL_CONNECT_RETRIES: u32 = 2;
+pub const MAX_INITIAL_CONNECT_RETRIES: u32 = 5;
 const INITIAL_HTTP_5XX_RETRY_BACKOFFS: [Duration; 5] = [
     Duration::from_secs(1),
     Duration::from_secs(5),

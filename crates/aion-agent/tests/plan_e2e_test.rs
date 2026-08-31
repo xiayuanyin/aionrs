@@ -206,6 +206,12 @@ fn tc_3_6_e2e_02_plan_mode_and_compaction_independent() {
             }],
         ));
     }
+    messages.push(Message::new(
+        Role::Assistant,
+        vec![ContentBlock::Text {
+            text: "processed".to_string(),
+        }],
+    ));
 
     // Create plan state simulating active plan mode
     let plan_state = PlanState {

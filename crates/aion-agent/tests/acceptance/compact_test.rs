@@ -60,6 +60,12 @@ fn microcompact_clears_old_tool_results() {
             vec![tool_result_block(&id, &format!("content of file {i}"))],
         ));
     }
+    messages.push(Message::new(
+        Role::Assistant,
+        vec![ContentBlock::Text {
+            text: "processed".to_string(),
+        }],
+    ));
 
     let result = microcompact(&mut messages, &config);
 

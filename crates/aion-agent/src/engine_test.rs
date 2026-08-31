@@ -921,6 +921,10 @@ mod tests_compact {
         )
     }
 
+    fn assistant_text_msg(text: &str) -> Message {
+        Message::new(Role::Assistant, vec![ContentBlock::Text { text: text.to_string() }])
+    }
+
     #[test]
     fn abort_current_turn_closes_pending_tool_uses() {
         let output = Arc::new(RecordingOutput::default());
@@ -1286,6 +1290,7 @@ mod tests_compact {
             messages.push(tool_use_msg(&id, "Read"));
             messages.push(tool_result_msg(&id, &format!("data-{i}")));
         }
+        messages.push(assistant_text_msg("processed"));
 
         let config = CompactConfig {
             micro_keep_recent: 3,
@@ -1317,6 +1322,7 @@ mod tests_compact {
             messages.push(tool_use_msg(&id, "Read"));
             messages.push(tool_result_msg(&id, &format!("data-{i}")));
         }
+        messages.push(assistant_text_msg("processed"));
 
         let config = CompactConfig {
             microcompact_enabled: true,
@@ -1346,6 +1352,49 @@ mod tests_compact {
     }
 
     #[tokio::test]
+    async fn microcompact_preserves_results_pending_provider_delivery() {
+        let tool_uses = (0..12)
+            .map(|i| ContentBlock::ToolUse {
+                id: format!("t{i}"),
+                name: "Read".to_string(),
+                input: json!({}),
+                extra: None,
+            })
+            .collect();
+        let tool_results = (0..12)
+            .map(|i| ContentBlock::ToolResult {
+                tool_use_id: format!("t{i}"),
+                content: format!("data-{i}"),
+                is_error: false,
+            })
+            .collect();
+        let messages = vec![
+            Message::new(Role::Assistant, tool_uses),
+            Message::new(Role::User, tool_results),
+        ];
+        let config = CompactConfig {
+            microcompact_enabled: true,
+            micro_keep_recent: 3,
+            ..Default::default()
+        };
+        let state = CompactState::new();
+        let mut engine = make_compact_engine(config, state, messages);
+
+        engine.run_compaction().await.unwrap();
+
+        let cleared_count = engine
+            .messages
+            .iter()
+            .flat_map(|message| &message.content)
+            .filter(
+                |block| matches!(block, ContentBlock::ToolResult { content, .. } if content == "[Tool result cleared]"),
+            )
+            .count();
+        assert_eq!(cleared_count, 0);
+        assert_eq!(engine.context_state.microcompact_count, 0);
+    }
+
+    #[tokio::test]
     async fn microcompact_does_not_lower_the_emergency_watermark() {
         let mut messages = Vec::new();
         for i in 0..3 {
@@ -1353,6 +1402,7 @@ mod tests_compact {
             messages.push(tool_use_msg(&id, "Read"));
             messages.push(tool_result_msg(&id, &"x".repeat(4_000)));
         }
+        messages.push(assistant_text_msg("processed"));
 
         let config = CompactConfig {
             context_window: 200_000,

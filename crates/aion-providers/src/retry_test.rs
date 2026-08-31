@@ -93,6 +93,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_initial_connect_retry_exhausts_after_five_retries() {
+        tokio::time::pause();
+
+        let counter = Arc::new(AtomicU32::new(0));
+        let result = with_initial_connect_retry(|| {
+            let counter = Arc::clone(&counter);
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Err::<(), _>(ProviderError::Connection("connection refused".into()))
+            }
+        })
+        .await;
+
+        assert!(matches!(result.unwrap_err(), ProviderError::Connection(_)));
+        assert_eq!(counter.load(Ordering::SeqCst), 6);
+    }
+
+    #[tokio::test]
     async fn test_initial_connect_retry_does_not_retry_rate_limit() {
         let counter = Arc::new(AtomicU32::new(0));
         let result = with_initial_connect_retry(|| {

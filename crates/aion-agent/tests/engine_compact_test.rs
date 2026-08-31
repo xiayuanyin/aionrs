@@ -544,11 +544,12 @@ async fn tc_2_6_02_micro_before_auto_execution_order() {
         })
         .count();
 
-    // 7 tool results total, keep_recent=3 → 4 cleared by micro
-    // before auto received the messages.
+    // The latest of 7 tool results is still pending provider delivery. Of the
+    // 6 consumed results, keep_recent=3 leaves 3 eligible for clearing before
+    // auto receives the messages.
     assert_eq!(
-        cleared_count, 4,
-        "microcompact should have cleared 4 tool results before autocompact ran"
+        cleared_count, 3,
+        "microcompact should clear consumed results without clearing the pending batch"
     );
 }
 

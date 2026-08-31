@@ -109,6 +109,12 @@ async fn tc_ax_01_multi_feature_collaboration() {
             }],
         ));
     }
+    messages.push(Message::new(
+        Role::Assistant,
+        vec![ContentBlock::Text {
+            text: "processed".to_string(),
+        }],
+    ));
 
     let compact_config = CompactConfig {
         micro_keep_recent: 3,

@@ -78,6 +78,7 @@ fn tc_2_3_01_basic_clearing() {
         msgs.push(assistant(vec![tool_use(id, name)]));
         msgs.push(user(vec![tool_result(id, &format!("output-{id}"))]));
     }
+    msgs.push(assistant(vec![text("processed")]));
 
     let config = CompactConfig {
         micro_keep_recent: 3,
@@ -146,6 +147,7 @@ fn tc_2_3_03_only_compactable_tools_cleared() {
         user(vec![tool_result("t3", "skill-output")]),
         assistant(vec![tool_use("t4", "Read")]),
         user(vec![tool_result("t4", "read-output-2")]),
+        assistant(vec![text("processed")]),
     ];
 
     // compactable_tools does NOT include "Skill".
@@ -247,6 +249,7 @@ fn tc_2_3_08_token_estimation() {
         user(vec![tool_result("b", &content_b)]),
         assistant(vec![tool_use("c", "Grep")]),
         user(vec![tool_result("c", &content_c)]),
+        assistant(vec![text("processed")]),
     ];
     let config = CompactConfig {
         micro_keep_recent: 1,

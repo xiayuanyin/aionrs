@@ -2,7 +2,9 @@
 //!
 //! This is the lightest compaction level.  It walks the conversation,
 //! identifies tool results from compactable tools, and replaces the
-//! content of all but the N most recent with a short placeholder.
+//! content of all but the N most recent with a short placeholder. Results
+//! produced after the latest assistant response are still pending delivery to
+//! the provider and are never cleared.
 
 use std::collections::{HashMap, HashSet};
 
@@ -67,17 +69,26 @@ fn count_trigger(messages: &[Message], config: &CompactConfig) -> bool {
 
 /// Clear old tool result content in-place.
 ///
-/// Keeps the `config.micro_keep_recent` most recent compactable results
-/// (minimum 1) and replaces older ones with [`CLEARED_TOOL_RESULT`].
-/// Already-cleared results are left untouched and do not count toward
-/// the keep budget.
+/// Keeps the `config.micro_keep_recent` most recent consumed, compactable
+/// results (minimum 1) and replaces older ones with
+/// [`CLEARED_TOOL_RESULT`]. A tool result is considered consumed only when a
+/// later assistant response exists, proving that a provider request containing
+/// it completed. Results after the latest assistant response are preserved as
+/// one pending batch. Already-cleared results are left untouched and do not
+/// count toward the keep budget.
 pub fn microcompact(messages: &mut [Message], config: &CompactConfig) -> MicrocompactResult {
     let tool_names = build_tool_name_map(messages);
     let compactable_set: HashSet<&str> = config.compactable_tools.iter().map(String::as_str).collect();
 
-    // Collect (message_index, block_index) of all compactable, non-cleared
-    // tool results, in conversation order.
-    let targets = collect_compactable_locations(messages, &tool_names, &compactable_set);
+    // A later assistant response proves the provider consumed everything
+    // before it. The latest tool-result batch follows the latest assistant
+    // tool-use message, so it stays outside this boundary until the next
+    // provider response is persisted.
+    let consumed_end = messages
+        .iter()
+        .rposition(|message| message.role == Role::Assistant)
+        .unwrap_or(0);
+    let targets = collect_compactable_locations(&messages[..consumed_end], &tool_names, &compactable_set);
 
     let keep = config.micro_keep_recent.max(1);
     if targets.len() <= keep {
