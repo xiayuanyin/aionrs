@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.13](https://github.com/xiayuanyin/aionrs/compare/0.2.12...0.2.13) (2026-09-05)
+
+### Features
+
+* **engine:** deduplicate streamed tool calls by call ID ([cd1206f](https://github.com/xiayuanyin/aionrs/commit/cd1206f))
+
 ## [0.2.11](https://github.com/iOfficeAI/aionrs/compare/v0.2.10...v0.2.11) (2026-08-13)
 
 
