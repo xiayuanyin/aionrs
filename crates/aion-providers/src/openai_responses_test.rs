@@ -57,13 +57,13 @@ mod tests {
     }
 
     #[test]
-    fn completed_response_deduplicates_items_and_emits_usage() {
+    fn completed_response_deduplicates_function_calls_by_call_id_and_emits_usage() {
         let mut state = StreamState::new();
-        let item = r#"{"type":"response.output_item.done","item":{"id":"fc_1","type":"function_call","call_id":"call_1","name":"read","arguments":"{}"}}"#;
+        let item = r#"{"type":"response.output_item.done","item":{"id":"fc_1","type":"function_call","status":"completed","call_id":"call_1","name":"read","arguments":"{}"}}"#;
         assert_eq!(parse_sse_chunk(item, &mut state).len(), 1);
 
         let completed = parse_sse_chunk(
-            r#"{"type":"response.completed","response":{"status":"completed","output":[{"id":"fc_1","type":"function_call","call_id":"call_1","name":"read","arguments":"{}"}],"usage":{"input_tokens":100,"input_tokens_details":{"cached_tokens":80},"output_tokens":20}}}"#,
+            r#"{"type":"response.completed","response":{"status":"completed","output":[{"type":"function_call","call_id":"call_1","name":"read","arguments":"{}"}],"usage":{"input_tokens":100,"input_tokens_details":{"cached_tokens":80},"output_tokens":20}}}"#,
             &mut state,
         );
 

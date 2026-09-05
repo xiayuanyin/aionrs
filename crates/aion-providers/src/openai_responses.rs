@@ -8,6 +8,7 @@ pub(crate) const PROVIDER_ITEM_OWNER: &str = "openai_responses";
 
 pub(crate) struct StreamState {
     seen_output_items: HashSet<String>,
+    seen_tool_call_ids: HashSet<String>,
     saw_tool_call: bool,
     terminal: bool,
 }
@@ -16,6 +17,7 @@ impl StreamState {
     pub(crate) fn new() -> Self {
         Self {
             seen_output_items: HashSet::new(),
+            seen_tool_call_ids: HashSet::new(),
             saw_tool_call: false,
             terminal: false,
         }
@@ -150,6 +152,15 @@ fn events_for_output_item(item: &Value, state: &mut StreamState) -> Vec<LlmEvent
 fn function_call_event(item: &Value, state: &mut StreamState) -> Option<LlmEvent> {
     let call_id = item.get("call_id").and_then(Value::as_str)?.to_string();
     let name = item.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+    if !call_id.is_empty() && !state.seen_tool_call_ids.insert(call_id.clone()) {
+        tracing::debug!(
+            target: "aion_providers",
+            tool_call_id = %call_id,
+            tool = %name,
+            "ignored duplicate OpenAI Responses function call"
+        );
+        return None;
+    }
     let arguments = item.get("arguments").and_then(Value::as_str).unwrap_or("{}");
     let input = serde_json::from_str(arguments).unwrap_or_else(|_| Value::Object(Map::new()));
 

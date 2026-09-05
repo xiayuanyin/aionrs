@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::mem::replace;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -979,6 +980,7 @@ impl AgentEngine {
         let mut thinking_signature: Option<String> = None;
         let mut provider_items: Vec<ContentBlock> = Vec::new();
         let mut tool_calls: Vec<ContentBlock> = Vec::new();
+        let mut seen_tool_call_ids = HashSet::new();
         let mut stop_reason = StopReason::EndTurn;
         let mut usage = TokenUsage::default();
 
@@ -989,6 +991,15 @@ impl AgentEngine {
                     assistant_text.push_str(&text);
                 }
                 LlmEvent::ToolUse { id, name, input, extra } => {
+                    if !id.trim().is_empty() && !seen_tool_call_ids.insert(id.clone()) {
+                        warn!(
+                            target: "aion_agent",
+                            tool_use_id = %id,
+                            tool = %name,
+                            "ignored duplicate provider tool call"
+                        );
+                        continue;
+                    }
                     if id.trim().is_empty() {
                         error!(
                             target: "aion_agent",

@@ -2212,6 +2212,46 @@ mod tests_handle_command {
     }
 
     #[tokio::test]
+    async fn consume_stream_deduplicates_tool_calls_by_id() {
+        let engine = make_engine();
+        let (tx, mut rx) = channel(3);
+        tx.send(LlmEvent::ToolUse {
+            id: "call-1".to_string(),
+            name: "Read".to_string(),
+            input: json!({ "path": "first.txt" }),
+            extra: Some(json!({ "source": "output_item.done" })),
+        })
+        .await
+        .unwrap();
+        tx.send(LlmEvent::ToolUse {
+            id: "call-1".to_string(),
+            name: "Read".to_string(),
+            input: json!({ "path": "duplicate.txt" }),
+            extra: None,
+        })
+        .await
+        .unwrap();
+        tx.send(LlmEvent::Done {
+            stop_reason: StopReason::ToolUse,
+            usage: TokenUsage::default(),
+        })
+        .await
+        .unwrap();
+        drop(tx);
+
+        let outcome = engine.consume_stream(&mut rx).await.unwrap();
+
+        assert_eq!(outcome.tool_calls.len(), 1);
+        assert!(matches!(
+            &outcome.tool_calls[0],
+            ContentBlock::ToolUse { id, input, extra, .. }
+                if id == "call-1"
+                    && input == &json!({ "path": "first.txt" })
+                    && extra == &Some(json!({ "source": "output_item.done" }))
+        ));
+    }
+
+    #[tokio::test]
     async fn visible_retry_text_and_successful_tools_do_not_reset_repeated_failure() {
         let provider = Arc::new(RetryingToolProvider::default());
         let failed_executions = Arc::new(AtomicUsize::new(0));
